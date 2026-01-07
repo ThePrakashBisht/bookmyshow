@@ -16,9 +16,50 @@ services:
     networks:
       - bookmyshow-network
 
+  # PostgreSQL Database for Event Service
+  postgres-event:
+    image: postgres:15-alpine
+    container_name: postgres-event
+    environment:
+      POSTGRES_DB: eventservice_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_event_data:/var/lib/postgresql/data
+    networks:
+      - bookmyshow-network
+
+  postgres-booking:
+    image: postgres:15-alpine
+    container_name: postgres-booking
+    environment:
+      POSTGRES_DB: bookingservice_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_booking_data:/var/lib/postgresql/data
+    networks:
+      - bookmyshow-network
+
+  redis:
+      image: redis:7-alpine
+      container_name: redis
+      ports:
+        - "6379:6379"
+      volumes:
+        - redis_data:/data
+      command: redis-server --appendonly yes
+      networks:
+        - bookmyshow-network
+
 networks:
   bookmyshow-network:
     driver: bridge
 
 volumes:
   postgres_user_data:
+  postgres_event_data:
