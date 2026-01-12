@@ -35,6 +35,13 @@ public class ShowController {
         );
     }
 
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<ShowResponse>>> getAllShows() {
+        log.info("Get All Shows");
+        List<ShowResponse> shows = showService.getAllShows();
+        return ResponseEntity.ok(ApiResponse.success(shows));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ShowResponse>> getShowById(@PathVariable Long id) {
         log.info("Get show by ID: {}", id);

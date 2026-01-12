@@ -74,7 +74,7 @@ public class AuthService {
 
         // Generate JWT token
         CustomUserDetails userDetails = new CustomUserDetails(savedUser);
-        String token = jwtService.generateToken(userDetails);
+        String token = jwtService.generateToken(userDetails, savedUser.getId());
 
         // Build response
         return AuthResponse.builder()
@@ -103,7 +103,7 @@ public class AuthService {
         log.info("User logged in successfully: {}", user.getEmail());
 
         // Generate JWT token
-        String token = jwtService.generateToken(userDetails);
+        String token = jwtService.generateToken(userDetails, user.getId());
 
         // Build response
         return AuthResponse.builder()

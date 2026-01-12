@@ -1,0 +1,247 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # Redis for Rate Limiting
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+
+  cloud:
+    gateway:
+      # Global CORS configuration
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "http://localhost:*"
+              - "http://127.0.0.1:*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            exposedHeaders:
+              - Authorization
+              - X-Request-Id
+              - X-RateLimit-Remaining
+              - X-RateLimit-Replenish-Rate
+              - X-RateLimit-Burst-Capacity
+            allowCredentials: true
+            maxAge: 3600
+
+      # Global timeout settings
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+        pool:
+          max-connections: 500
+          acquire-timeout: 10000
+
+      # Route definitions
+      routes:
+        # ============ USER SERVICE ROUTES ============
+        - id: user-service-auth
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@ipKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                fallbackUri: forward:/fallback/user-service
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE, GATEWAY_TIMEOUT
+                methods: GET, POST
+                backoff:
+                  firstBackoff: 100ms
+                  maxBackoff: 500ms
+                  factor: 2
+                  basedOnPreviousValue: false
+
+        - id: user-service-users
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                fallbackUri: forward:/fallback/user-service
+
+        # ============ EVENT SERVICE ROUTES ============
+        - id: event-service-read
+          uri: ${EVENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/cities/**, /api/events/**, /api/shows/**, /api/venues/**
+            - Method=GET
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@ipKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: eventServiceCircuitBreaker
+                fallbackUri: forward:/fallback/event-service
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
+                methods: GET
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 300ms
+                  factor: 2
+
+        - id: event-service-write
+          uri: ${EVENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/cities/**, /api/events/**, /api/shows/**, /api/venues/**
+            - Method=POST, PUT, DELETE, PATCH
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: eventServiceCircuitBreaker
+                fallbackUri: forward:/fallback/event-service
+
+        # ============ BOOKING SERVICE ROUTES ============
+        - id: booking-service
+          uri: ${BOOKING_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/bookings/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: bookingServiceCircuitBreaker
+                fallbackUri: forward:/fallback/booking-service
+
+        # ============ INTERNAL ROUTES ============
+        - id: event-service-internal
+          uri: ${EVENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/internal/events/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: eventServiceCircuitBreaker
+                fallbackUri: forward:/fallback/event-service
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        recordExceptions:
+          - java.io.IOException
+          - java.net.ConnectException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+    instances:
+      userServiceCircuitBreaker:
+        baseConfig: default
+      eventServiceCircuitBreaker:
+        baseConfig: default
+        failureRateThreshold: 60
+      bookingServiceCircuitBreaker:
+        baseConfig: default
+        failureRateThreshold: 40
+        waitDurationInOpenState: 5000
+
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+    instances:
+      userServiceCircuitBreaker:
+        timeoutDuration: 3s
+      eventServiceCircuitBreaker:
+        timeoutDuration: 5s
+      bookingServiceCircuitBreaker:
+        timeoutDuration: 15s
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:dGhpc2lzYXZlcnlsb25nc2VjcmV0a2V5Zm9yand0dG9rZW5nZW5lcmF0aW9udGhhdGlzYXRsZWFzdDI1NmJpdHNsb25n}
+
+# Actuator & Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway, circuitbreakers, ratelimiters, metrics, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    gateway:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+
+# Logging
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: INFO
+    io.github.resilience4j: DEBUG
+    com.bookmyshow.gateway: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

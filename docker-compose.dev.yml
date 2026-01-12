@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  postgres-user:
+    image: postgres:15-alpine
+    container_name: postgres-user
+    environment:
+      POSTGRES_DB: userservice_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-user-data:/var/lib/postgresql/data
+    networks:
+      - bookmyshow-network
+
+  postgres-event:
+    image: postgres:15-alpine
+    container_name: postgres-event
+    environment:
+      POSTGRES_DB: eventservice_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-event-data:/var/lib/postgresql/data
+    networks:
+      - bookmyshow-network
+
+  postgres-booking:
+    image: postgres:15-alpine
+    container_name: postgres-booking
+    environment:
+      POSTGRES_DB: bookingservice_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-booking-data:/var/lib/postgresql/data
+    networks:
+      - bookmyshow-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - bookmyshow-network
+    command: redis-server --appendonly yes
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - bookmyshow-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - bookmyshow-network
+
+networks:
+  bookmyshow-network:
+    driver: bridge
+
+volumes:
+  postgres-user-data:
+  postgres-event-data:
+  postgres-booking-data:
+  redis-data:

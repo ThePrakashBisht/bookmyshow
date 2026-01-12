@@ -283,6 +283,15 @@ public class BookingService {
         return bookingMapper.toBookingResponse(booking);
     }
 
+//    @Transactional(readOnly = true)
+//    public BookingResponse getBookingById(Long bookingId) {
+//        Booking booking = bookingRepository.findById(bookingId)
+//                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
+//
+//        return bookingMapper.toBookingResponse(booking);
+//    }
+
+    @Transactional(readOnly = true)
     public BookingResponse getBookingById(Long id) {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", id));

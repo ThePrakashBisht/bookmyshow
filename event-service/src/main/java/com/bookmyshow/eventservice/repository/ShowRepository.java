@@ -89,4 +89,6 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
     // Find shows that have ended but not marked as completed
     @Query("SELECT s FROM Show s WHERE s.endTime < :now AND s.status NOT IN ('CANCELLED', 'COMPLETED')")
     List<Show> findEndedShowsNotCompleted(@Param("now") LocalDateTime now);
+
+    List<Show> findByEventId(Long eventId);
 }

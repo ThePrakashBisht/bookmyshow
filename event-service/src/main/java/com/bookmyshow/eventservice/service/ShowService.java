@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -228,5 +229,21 @@ public class ShowService {
     public Show findShowById(Long id) {
         return showRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Show", "id", id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ShowResponse> getAllShows() {
+        List<Show> shows = showRepository.findAll();
+        return shows.stream()
+                .map(entityMapper::toShowResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ShowResponse> getShowsByEventId(Long eventId) {
+        List<Show> shows = showRepository.findByEventId(eventId);
+        return shows.stream()
+                .map(entityMapper::toShowResponse)
+                .collect(Collectors.toList());
     }
 }

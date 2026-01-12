@@ -89,6 +89,13 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<ApiResponse<BookingResponse>> getBookingById(
+            @PathVariable Long bookingId) {
+        BookingResponse booking = bookingService.getBookingById(bookingId);
+        return ResponseEntity.ok(ApiResponse.success(booking));
+    }
+
     /**
      * Get all bookings for a user
      */
